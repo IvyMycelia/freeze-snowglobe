@@ -11,7 +11,7 @@ public class WallSlideSurface : MonoBehaviour
     [Header("Wall Jump")]
     [SerializeField, Min(0.1f)] private float kickHorizontalSpeed = 13f;
     [SerializeField, Min(0.1f)] private float kickVerticalSpeed = 15f;
-    [SerializeField] private bool restoreAirShot = true;
+    [SerializeField] private bool restoreAirShot = false;
 
     public float MaximumSlideSpeed => maximumSlideSpeed;
     public float InwardClingSpeed => inwardClingSpeed;

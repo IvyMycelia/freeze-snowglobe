@@ -8,7 +8,7 @@ public class BounceSurface : MonoBehaviour
     [SerializeField, Range(0.1f, 1.3f)] private float speedRetention = 0.96f;
     [SerializeField] private float minimumImpactSpeed = 2.5f;
     [SerializeField] private float minimumReboundSpeed = 7f;
-    [SerializeField] private bool restoreAirShot = true;
+    [SerializeField] private bool restoreAirShot = false;
 
     public float SpeedRetention => speedRetention;
     public float MinimumImpactSpeed => minimumImpactSpeed;

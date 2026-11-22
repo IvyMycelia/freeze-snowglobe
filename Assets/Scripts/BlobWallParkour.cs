@@ -15,10 +15,14 @@ public class BlobWallParkour : MonoBehaviour
     [SerializeField, Range(0.05f, 0.5f)] private float kickCooldown = 0.18f;
     [SerializeField] private float slideStartsBelowVerticalSpeed = 0.35f;
 
-    [Header("Optional Visuals")]
-    [Tooltip("Put a looping, Play On Awake OFF Particle System on Player, outside VisualRoot.")]
-    [SerializeField] private ParticleSystem wallSlideParticles;
-    [SerializeField] private ParticleSystem wallKickBurst;
+    [Header("Particle Prefabs (assign assets from Project window)")]
+    [Tooltip("Looping ParticleSystem prefab. Instantiated in the scene when the blob slides; it is NOT parented to Player.")]
+    [SerializeField] private ParticleSystem wallSlidePrefab;
+    [Tooltip("Non-looping ParticleSystem prefab. Instantiated at the wall contact for each kick.")]
+    [SerializeField] private ParticleSystem wallKickPrefab;
+    [SerializeField, Min(1)] private int kickParticleCount = 12;
+
+    [Header("Optional Animator")]
     [SerializeField] private Animator blobAnimator;
 
     public bool IsWallSliding { get; private set; }
@@ -28,6 +32,8 @@ public class BlobWallParkour : MonoBehaviour
     private BlobSlingshot motor;
     private Rigidbody2D body;
     private WallSlideSurface contactedWall;
+    // A restoring wall can grant air shots only once per continuous contact.
+    private WallSlideSurface wallThatRestoredThisContact;
     private Vector2 contactPoint;
     private float wallNormalX;
     private float lastContactTime = -100f;
@@ -37,6 +43,9 @@ public class BlobWallParkour : MonoBehaviour
     private bool pressActive;
     private bool hasWallSlideParam;
     private bool hasWallKickTrigger;
+
+    // Scene instance, not the prefab asset. Reused while this Player is enabled.
+    private ParticleSystem activeWallSlide;
 
     private void Awake()
     {
@@ -57,8 +66,7 @@ public class BlobWallParkour : MonoBehaviour
                     hasWallKickTrigger = true;
             }
         }
-        if (wallSlideParticles != null)
-            wallSlideParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
     }
 
     private void OnEnable()
@@ -71,6 +79,7 @@ public class BlobWallParkour : MonoBehaviour
     {
         if (motor != null) motor.Respawned -= ResetWallState;
         ResetWallState();
+        DestroySlideInstance();
     }
 
     private void Update()
@@ -132,17 +141,11 @@ public class BlobWallParkour : MonoBehaviour
 
         if (holdingSpace && fallingOrNearApex)
         {
-            if (!IsWallSliding && contactedWall.RestoreAirShot)
-                motor.RefreshAirShots();
-
             motor.ApplyWallSlide(contactedWall.MaximumSlideSpeed,
                 wallNormalX, contactedWall.InwardClingSpeed);
             SetSliding(true);
-            if (wallSlideParticles != null)
-            {
-                wallSlideParticles.transform.position =
-                    contactPoint + new Vector2(wallNormalX * 0.04f, -0.06f);
-            }
+            if (activeWallSlide != null)
+                activeWallSlide.transform.position = SlideEffectPosition();
         }
         else
         {
@@ -158,9 +161,10 @@ public class BlobWallParkour : MonoBehaviour
 
         WallSlideSurface wall = contactedWall;
         float normalX = wallNormalX;
+        // Recharging happens on initial contact, not again on every kick.
         if (!motor.RequestWallKick(normalX,
                 wall.KickHorizontalSpeed, wall.KickVerticalSpeed,
-                wall.RestoreAirShot))
+                false))
             return false;
 
         lastKickAt = Time.time;
@@ -169,11 +173,7 @@ public class BlobWallParkour : MonoBehaviour
         contactedWall = null;
         SetSliding(false);
 
-        if (wallKickBurst != null)
-        {
-            wallKickBurst.transform.position = contactPoint;
-            wallKickBurst.Emit(12);
-        }
+        SpawnKickBurst();
         if (blobAnimator != null && hasWallKickTrigger)
             blobAnimator.SetTrigger("WallKick");
         return true;
@@ -204,6 +204,15 @@ public class BlobWallParkour : MonoBehaviour
                 continue;
 
             contactedWall = wall;
+            // Being near/holding on a wall does NOT restore charges.
+            // Only this wall's explicit setting permits a one-time refill
+            // for this continuous contact.
+            if (!motor.IsGrounded && wall.RestoreAirShot &&
+                wallThatRestoredThisContact != wall)
+            {
+                motor.RefreshAirShots();
+                wallThatRestoredThisContact = wall;
+            }
             contactPoint = point.point;
             float relativeX = body.worldCenterOfMass.x - point.point.x;
             wallNormalX = Mathf.Abs(relativeX) > 0.05f
@@ -219,7 +228,12 @@ public class BlobWallParkour : MonoBehaviour
         WallSlideSurface wall = collision.collider.GetComponentInParent<WallSlideSurface>();
         if (wall == null)
             wall = collision.gameObject.GetComponentInParent<WallSlideSurface>();
-        if (wall != null && wall == contactedWall)
+        if (wall == null) return;
+
+        if (wall == wallThatRestoredThisContact)
+            wallThatRestoredThisContact = null;
+
+        if (wall == contactedWall)
         {
             contactedWall = null;
             lastContactTime = -100f;
@@ -227,28 +241,74 @@ public class BlobWallParkour : MonoBehaviour
         }
     }
 
+    private Vector3 SlideEffectPosition()
+    {
+        Vector2 p = contactPoint + new Vector2(wallNormalX * 0.04f, -0.06f);
+        return new Vector3(p.x, p.y, transform.position.z);
+    }
+
     private void SetSliding(bool sliding)
     {
         if (IsWallSliding == sliding) return;
         IsWallSliding = sliding;
+
         if (blobAnimator != null && hasWallSlideParam)
             blobAnimator.SetBool("WallSliding", sliding);
 
-        if (wallSlideParticles == null) return;
         if (sliding)
         {
-            if (!wallSlideParticles.isPlaying)
-                wallSlideParticles.Play();
+            if (wallSlidePrefab == null) return;
+
+            // Instantiate once, then reuse. The clone stays at the scene root,
+            // not under Player, and older particles remain in world space.
+            if (activeWallSlide == null)
+            {
+                activeWallSlide = Instantiate(
+                    wallSlidePrefab, SlideEffectPosition(), Quaternion.identity);
+            }
+
+            activeWallSlide.transform.position = SlideEffectPosition();
+            if (!activeWallSlide.isPlaying)
+                activeWallSlide.Play(true);
         }
-        else
+        else if (activeWallSlide != null)
         {
-            wallSlideParticles.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+            // Existing particles finish naturally; no more are emitted.
+            activeWallSlide.Stop(true, ParticleSystemStopBehavior.StopEmitting);
         }
+    }
+
+    private void SpawnKickBurst()
+    {
+        if (wallKickPrefab == null) return;
+
+        ParticleSystem burst = Instantiate(
+            wallKickPrefab,
+            new Vector3(contactPoint.x, contactPoint.y, transform.position.z),
+            Quaternion.identity);
+
+        burst.Play(true);
+        burst.Emit(kickParticleCount);
+
+        // Destroy this scene clone after its particles have finished.
+        var main = burst.main;
+        float life = main.startDelay.constantMax +
+                     main.duration + main.startLifetime.constantMax + 0.5f;
+        Destroy(burst.gameObject, Mathf.Max(0.5f, life));
+    }
+
+    private void DestroySlideInstance()
+    {
+        if (activeWallSlide == null) return;
+        activeWallSlide.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        Destroy(activeWallSlide.gameObject);
+        activeWallSlide = null;
     }
 
     private void ResetWallState()
     {
         contactedWall = null;
+        wallThatRestoredThisContact = null;
         lastContactTime = -100f;
         pressedAt = -100f;
         bufferedTapExpiresAt = -100f;

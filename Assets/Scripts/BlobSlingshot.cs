@@ -21,8 +21,11 @@ public class BlobSlingshot : MonoBehaviour
     [SerializeField] private float groundAcceleration = 68f;
     [SerializeField] private float groundBraking = 54f;
     [SerializeField] private float airSteerAcceleration = 8f;
+    // Ground detection uses real collision contacts + upward-facing normals.
+    // Kept only for an optional gizmo showing the old GroundCheck location.
     [SerializeField] private float groundCheckRadius = 0.12f;
-    [SerializeField] private int extraAirShots = 1;
+    [SerializeField, Range(0f, 80f)] private float maxGroundSlopeDegrees = 50f;
+    [SerializeField, Min(0)] private int extraAirShots = 1;
 
     [Header("Powerful Slingshot")]
     [SerializeField] private float maxLaunchSpeed = 22.5f;
@@ -90,6 +93,7 @@ public class BlobSlingshot : MonoBehaviour
     private bool shatterArmed;
     private bool controlsEnabled = true;
 
+    public int AirShotsRemaining => airShotsRemaining;
     public bool IsGrounded => grounded;
     public bool ControlsEnabled => controlsEnabled;
     public bool IsAiming => aiming;
@@ -105,19 +109,16 @@ public class BlobSlingshot : MonoBehaviour
     {
         body = GetComponent<Rigidbody2D>();
         spawnPoint = body.position;
-        airShotsRemaining = extraAirShots;
+        airShotsRemaining = Mathf.Max(0, extraAirShots);
         body.gravityScale = playerGravityScale;
         body.linearDamping = 0f;
         body.interpolation = RigidbodyInterpolation2D.Interpolate;
         body.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
         body.freezeRotation = true;
 
-        if (groundCheck == null)
-        {
-            UnityEngine.Debug.LogError("BlobSlingshot: assign GroundCheck.", this);
-            enabled = false;
-            return;
-        }
+        // GroundCheck is retained as an optional visual marker for compatibility.
+        // We now detect actual floor contacts; overlap checks can treat walls
+        // as ground and accidentally refill air launches.
 
         if (trajectory != null)
         {
@@ -129,6 +130,9 @@ public class BlobSlingshot : MonoBehaviour
 
     private void Update()
     {
+        if (Input.GetKeyDown(KeyCode.R))
+            Respawn();
+
         if (shatterArmed && Time.time - shatterTime > maxShatterFlightTime)
             shatterArmed = false;
 
@@ -193,7 +197,7 @@ public class BlobSlingshot : MonoBehaviour
             bounceTime = Time.time;
             shatterArmed = false;
             if (refreshAirOnWallKick)
-                airShotsRemaining = extraAirShots;
+                RefreshAirShots();
             incomingVelocity = body.linearVelocity;
             Bounced?.Invoke(impactSpeed);
             onBounce?.Invoke();
@@ -203,14 +207,16 @@ public class BlobSlingshot : MonoBehaviour
         bool wasGrounded = grounded;
         grounded = Time.time - launchTime >= postLaunchGroundGrace
             && body.linearVelocity.y <= 1f
-            && Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayers) != null;
+            && HasRealFloorContact();
 
+        // Refill on an actual landing, not because an overlap detector
+        // happens to touch a wall or a trigger during flight.
         if (grounded)
         {
-            airShotsRemaining = extraAirShots;
             shatterArmed = false;
             if (!wasGrounded)
             {
+                RefreshAirShots();
                 float landingSpeed = Mathf.Max(0f, -incomingVelocity.y);
                 Landed?.Invoke(landingSpeed);
                 onLand?.Invoke();
@@ -243,6 +249,20 @@ public class BlobSlingshot : MonoBehaviour
 
         // Cached before the physics simulation resolves the next collision.
         incomingVelocity = body.linearVelocity;
+    }
+
+    // Only a real solid-body contact with a surface facing upwards counts
+    // as being grounded. Unity normal angles are measured from +X; 90° is up.
+    private bool HasRealFloorContact()
+    {
+        ContactFilter2D filter = new ContactFilter2D();
+        filter.useTriggers = false;
+        filter.SetLayerMask(groundLayers);
+        filter.SetNormalAngle(
+            90f - maxGroundSlopeDegrees,
+            90f + maxGroundSlopeDegrees
+        );
+        return body.IsTouching(filter);
     }
 
     private float ReadHorizontal()
@@ -335,7 +355,7 @@ public class BlobSlingshot : MonoBehaviour
                 launchPending = true;
                 shatterArmed = perfect;
                 shatterTime = Time.time;
-                if (!launchedFromGround) airShotsRemaining--;
+                if (!launchedFromGround) airShotsRemaining = Mathf.Max(0, airShotsRemaining - 1);
                 Launched?.Invoke(perfect);
                 onLaunch?.Invoke();
                 if (perfect) onPerfectLaunch?.Invoke();
@@ -435,7 +455,7 @@ public class BlobSlingshot : MonoBehaviour
         bounceTime = Time.time;
         launchTime = Time.time;
         grounded = false;
-        if (surface.RestoreAirShot) airShotsRemaining = extraAirShots;
+        if (surface.RestoreAirShot) RefreshAirShots();
         Bounced?.Invoke(v.magnitude);
         onBounce?.Invoke();
         return true;
@@ -457,9 +477,11 @@ public class BlobSlingshot : MonoBehaviour
         incomingVelocity = v;
     }
 
+    // Call this only after real ground contact or an explicitly configured
+    // wall/bounce surface. Never invoke it just because sliding restarted.
     public void RefreshAirShots()
     {
-        airShotsRemaining = extraAirShots;
+        airShotsRemaining = Mathf.Max(0, extraAirShots);
     }
 
     // Queues a predictable upward-and-away wall jump for the next physics tick.
@@ -512,7 +534,7 @@ public class BlobSlingshot : MonoBehaviour
         incomingVelocity = Vector2.zero;
         launchTime = -100f;
         grounded = false;
-        airShotsRemaining = extraAirShots;
+        RefreshAirShots(); // A checkpoint is a new life; reset its starting charge.
         Respawned?.Invoke();
     }
 

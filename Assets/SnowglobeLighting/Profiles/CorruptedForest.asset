@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 129825461d84545b5a77a70fe7c663be, type: 3}
+  m_Name: CorruptedForest
+  m_EditorClassIdentifier: Assembly-CSharp::SnowglobeLightingProfile
+  ambientColor: {r: 0.5372549, g: 0.58431375, b: 0.69411767, a: 1}
+  ambientIntensity: 0.48
+  sunlightColor: {r: 0.54509807, g: 0.7372549, b: 0.7882353, a: 1}
+  sunlightIntensity: 0.15
+  corruptionGlowColor: {r: 0.28627452, g: 0.8784314, b: 0.79607844, a: 1}
+  corruptionGlowIntensity: 0.75
+  fogColor: {r: 0.3137255, g: 0.4392157, b: 0.54901963, a: 1}
+  fogOpacity: 0.24
+  bloomIntensity: 0.28
+  colorFilter: {r: 0.7607843, g: 0.8509804, b: 0.9137255, a: 1}
+  contrast: 13
+  saturation: -22

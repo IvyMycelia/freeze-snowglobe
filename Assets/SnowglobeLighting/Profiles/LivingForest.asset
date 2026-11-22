@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 129825461d84545b5a77a70fe7c663be, type: 3}
+  m_Name: LivingForest
+  m_EditorClassIdentifier: Assembly-CSharp::SnowglobeLightingProfile
+  ambientColor: {r: 1, g: 0.9098039, b: 0.76862746, a: 1}
+  ambientIntensity: 0.78
+  sunlightColor: {r: 1, g: 0.88235295, b: 0.63529414, a: 1}
+  sunlightIntensity: 0.9
+  corruptionGlowColor: {r: 0.28627452, g: 0.8784314, b: 0.79607844, a: 1}
+  corruptionGlowIntensity: 0
+  fogColor: {r: 0.64705884, g: 0.7764706, b: 0.68235296, a: 1}
+  fogOpacity: 0.16
+  bloomIntensity: 0.12
+  colorFilter: {r: 1, g: 1, b: 1, a: 1}
+  contrast: 5
+  saturation: 0
