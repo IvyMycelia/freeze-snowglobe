@@ -15,7 +15,6 @@
 /[Uu]ser[Ss]ettings/
 *.log
 .DS_Store
-*.md
 
 # Memory Profiler generated files
 # MemoryCaptures can get excessive in size
