@@ -8,4 +8,4 @@ When you're not moving, the enemies don't move. But when you do, they move too..
 
 <img width="886" height="441" alt="image" src="https://github.com/user-attachments/assets/2738bff5-8521-4522-a67c-a61e8161b82a" />
 
-[LIVE DEMO](https://ivymycelia.space/Coagulation_Snowglobe_Gaem_Frfr_Super_Awesome_Yay/)
+[LIVE DEMO](https://ivymycelia.space/CoagulationSnowglobeGaemFrfrSuperAwesomeYay/)
